@@ -1,0 +1,24 @@
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Build output
+[Bb]in/
+[Oo]bj/
+
+# NuGet
+packages/
+
+# ASP.NET temporary files
+App_Data/*.mdf
+App_Data/*.ldf
+
+# Logs
+*.log
+
+# Secrets and local configurations
+appsettings.json
+appsettings.Development.json

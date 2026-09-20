@@ -1,0 +1,90 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title>Razorpay Test</title>
+
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+</head>
+
+<body>
+
+    <h2>Razorpay Test Payment</h2>
+
+    <button onclick="payNow()">Pay Now</button>
+
+    <script>
+
+        async function payNow() {
+
+            // Put the order ID returned by your API here
+            const orderId = "order_xxxxxxxxx";
+
+            // Put your TEST Razorpay Key ID here
+            const keyId = "rzp_test_xxxxxxxxx";
+
+            const bookingId = 1;
+
+            const options = {
+
+                key: keyId,
+
+                amount: 80000,
+
+                currency: "INR",
+
+                name: "Turf Booking",
+
+                description: "Turf Booking Payment",
+
+                order_id: orderId,
+
+                handler: async function (response) {
+
+                    console.log("Razorpay Response:");
+                    console.log(response);
+
+                    const verifyResponse = await fetch(
+                        "https://localhost:7086/api/payments/verify",
+                        {
+                            method: "POST",
+
+                            headers: {
+                                "Content-Type": "application/json"
+
+                                // Add Authorization if your API requires JWT
+                            },
+
+                            body: JSON.stringify({
+                                bookingId: bookingId,
+                                razorpayPaymentId:
+                                    response.razorpay_payment_id,
+                                razorpaySignature:
+                                    response.razorpay_signature
+                            })
+                        }
+                    );
+
+                    const result =
+                        await verifyResponse.json();
+
+                    console.log("Verification Result:");
+                    console.log(result);
+
+                    alert(result.message);
+                },
+
+                theme: {
+                    color: "#3399cc"
+                }
+            };
+
+            const razorpay =
+                new Razorpay(options);
+
+            razorpay.open();
+        }
+
+    </script>
+
+</body>
+</html>
