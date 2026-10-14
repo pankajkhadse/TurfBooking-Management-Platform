@@ -22,3 +22,5 @@ App_Data/*.ldf
 # Secrets and local configurations
 appsettings.json
 appsettings.Development.json
+config.bat
+node_modules

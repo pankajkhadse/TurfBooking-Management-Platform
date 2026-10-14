@@ -72,21 +72,55 @@ public class BookingService : IBookingService
         // 3. Normalize booking date
         // -------------------------------------------------
 
-        var bookingDate = request.BookingDate.Date;
-        var today = DateTime.UtcNow.Date;
+        //var bookingDate = request.BookingDate.Date;
+        //var today = DateTime.UtcNow.Date;
 
-        if (bookingDate < today)
+        //if (bookingDate < today)
+        //{
+        //    throw new BadRequestException(
+        //        "Booking date cannot be in the past.");
+        //}
+
+
+        // -------------------------------------------------
+        // 3. Normalize booking date and validate Indian time
+        // -------------------------------------------------
+
+        var indiaTimeZone = TimeZoneInfo.FindSystemTimeZoneById(
+            OperatingSystem.IsWindows()
+                ? "India Standard Time"
+                : "Asia/Kolkata");
+
+        var nowUtc = DateTime.UtcNow;
+
+        var nowIst = TimeZoneInfo.ConvertTimeFromUtc(
+            nowUtc,
+            indiaTimeZone);
+
+        var bookingDate = request.BookingDate.Date;
+        var todayIst = nowIst.Date;
+        var currentTimeIst = TimeOnly.FromDateTime(nowIst);
+
+        if (bookingDate < todayIst)
         {
             throw new BadRequestException(
                 "Booking date cannot be in the past.");
         }
+
+        if (bookingDate == todayIst &&
+            request.StartTime <= currentTimeIst)
+        {
+            throw new BadRequestException(
+                "You cannot book a slot whose start time has already passed.");
+        }
+
 
         // -------------------------------------------------
         // 4. Validate booking advance limit
         // -------------------------------------------------
 
         var maximumDate =
-            today.AddDays(turf.BookingAdvanceDays);
+            todayIst.AddDays(turf.BookingAdvanceDays);
 
         if (bookingDate > maximumDate)
         {
@@ -618,6 +652,150 @@ public class BookingService : IBookingService
             "Booking retrieved successfully.");
     }
 
+    //public async Task<ApiResponse<BookingResponse>> CancelBookingAsync(
+    //    int bookingId)
+    //{
+    //    var userId = _currentUser.UserId;
+
+    //    if (string.IsNullOrWhiteSpace(userId))
+    //        throw new UnauthorizedException("User is not authenticated.");
+
+    //    // Load the booking, its reserved slots, and its payment.
+    //    var booking = await _context.Bookings
+    //        .Include(x => x.Turf)
+    //        .Include(x => x.BookingSlots)
+    //        .Include(x => x.Payment)
+    //        .FirstOrDefaultAsync(x =>
+    //            x.Id == bookingId &&
+    //            x.UserId == userId);
+
+    //    if (booking == null)
+    //        throw new NotFoundException("Booking not found.");
+
+    //    if (booking.Status == BookingStatus.Cancelled)
+    //        throw new BadRequestException("Booking is already cancelled.");
+
+    //    if (booking.Status != BookingStatus.Pending &&
+    //        booking.Status != BookingStatus.Confirmed)
+    //    {
+    //        throw new BadRequestException("This booking cannot be cancelled.");
+    //    }
+
+    //    //var now = DateTime.UtcNow;
+    //    //var scheduledStart = booking.BookingDate.Date
+    //    //    .Add(booking.StartTime.ToTimeSpan());
+    //    //var timeUntilStart = scheduledStart - now;
+
+    //    var now = DateTime.UtcNow;
+
+    //    var indiaTimeZone = TimeZoneInfo.FindSystemTimeZoneById(
+    //        OperatingSystem.IsWindows()
+    //            ? "India Standard Time"
+    //            : "Asia/Kolkata");
+
+    //    var localSlotStart = DateTime.SpecifyKind(
+    //        booking.BookingDate.Date.Add(booking.StartTime.ToTimeSpan()),
+    //        DateTimeKind.Unspecified);
+
+    //    var scheduledStartUtc = TimeZoneInfo.ConvertTimeToUtc(
+    //        localSlotStart,
+    //        indiaTimeZone);
+
+    //    var timeUntilStart = scheduledStartUtc - now;
+
+    //    // Cancellation is blocked inside the final two hours.
+    //    if (timeUntilStart < TimeSpan.FromHours(2))
+    //    {
+    //        throw new BadRequestException(
+    //            "Bookings cannot be cancelled less than 2 hours before the scheduled start time.");
+    //    }
+
+    //    // Recommended default policy: >24h = 95%, 12-24h = 50%,
+    //    // 2-12h = 25%. The policy should be shown before checkout.
+
+    //    decimal refundPercentage = timeUntilStart > TimeSpan.FromHours(24)
+    //        ? 0.95m
+    //        : timeUntilStart >= TimeSpan.FromHours(12)
+    //            ? 0.50m
+    //            : 0.25m;
+
+
+    //    var payment = booking.Payment;
+    //    decimal refundAmount = 0m;
+
+    //    if (payment?.Status == PaymentStatus.Paid && refundPercentage > 0m)
+    //    {
+    //        refundAmount = decimal.Round(
+    //            payment.Amount * refundPercentage,
+    //            2,
+    //            MidpointRounding.AwayFromZero);
+    //    }
+
+    //    // Persist cancellation and release slots first. Refund processing is
+    //    // separate because Razorpay is an external service.
+    //    booking.Status = BookingStatus.Cancelled;
+    //    booking.CancelledAt = now;
+    //    booking.ExpiresAt = null;
+
+    //    foreach (var slot in booking.BookingSlots)
+    //        slot.IsActive = false;
+
+    //    await _context.SaveChangesAsync();
+
+    //    var refundNeedsAttention = false;
+
+    //    if (payment?.Status == PaymentStatus.Paid && refundAmount > 0m)
+    //    {
+    //        try
+    //        {
+    //            await _refundService.ProcessCancellationRefundAsync(
+    //                payment.Id,
+    //                refundAmount,
+    //                booking.Id);
+    //        }
+    //        catch (Exception ex)
+    //        {
+    //            // Cancellation remains committed; log the refund failure so
+    //            // it can be reviewed/retried rather than losing the request.
+    //            refundNeedsAttention = true;
+    //            _logger.LogError(
+    //                ex,
+    //                "Cancellation refund failed or needs retry for booking {BookingId}, payment {PaymentId}, amount {RefundAmount}.",
+    //                booking.Id,
+    //                payment.Id,
+    //                refundAmount);
+    //        }
+    //    }
+
+    //    var response = new BookingResponse
+    //    {
+    //        Id = booking.Id,
+    //        TurfId = booking.TurfId,
+    //        TurfName = booking.Turf.Name,
+    //        BookingDate = booking.BookingDate,
+    //        StartTime = booking.StartTime,
+    //        EndTime = booking.EndTime,
+    //        Amount = booking.Amount,
+    //        Status = booking.Status,
+    //        PaymentStatus = booking.PaymentStatus,
+    //        CreatedAt = booking.CreatedAt,
+    //        ExpiresAt = booking.ExpiresAt,
+    //        ConfirmedAt = booking.ConfirmedAt,
+    //        CancelledAt = booking.CancelledAt
+    //    };
+
+    //    var message = refundNeedsAttention
+    //        ? "Booking cancelled and slots released. The refund could not be confirmed; it requires retry or review."
+    //        : refundAmount > 0m
+    //            ? "Booking cancelled and slots released. Refund processing has been initiated; final status will update from Razorpay."
+    //            : payment?.Status == PaymentStatus.Paid
+    //                ? "Booking cancelled and slots released. No refund is due under the cancellation policy."
+    //                : "Booking cancelled successfully and slots released. No payment refund is required.";
+
+    //    return ApiResponse<BookingResponse>.SuccessResponse(response, message);
+    //}
+
+
     public async Task<ApiResponse<BookingResponse>> CancelBookingAsync(
         int bookingId)
     {
@@ -626,62 +804,99 @@ public class BookingService : IBookingService
         if (string.IsNullOrWhiteSpace(userId))
             throw new UnauthorizedException("User is not authenticated.");
 
-        // Load the booking, its reserved slots, and its payment.
+        // 1. Load the booking, turf owner, slots, and payment.
         var booking = await _context.Bookings
             .Include(x => x.Turf)
+                .ThenInclude(x => x.OwnerProfile)
             .Include(x => x.BookingSlots)
             .Include(x => x.Payment)
-            .FirstOrDefaultAsync(x =>
-                x.Id == bookingId &&
-                x.UserId == userId);
+            .FirstOrDefaultAsync(x => x.Id == bookingId);
 
         if (booking == null)
             throw new NotFoundException("Booking not found.");
 
+        // 2. Check whether the logged-in user is the customer.
+        var isCustomer = booking.UserId == userId;
+
+        // 3. Check whether the logged-in user owns this turf
+        // and has an approved owner profile.
+        var ownerProfile = booking.Turf.OwnerProfile;
+
+        var isApprovedOwner =
+            ownerProfile.ApplicationUserId == userId &&
+            ownerProfile.Status == OwnerStatus.Approved;
+
+        // Neither the customer nor the approved turf owner?
+        if (!isCustomer && !isApprovedOwner)
+            throw new NotFoundException("Booking not found.");
+
         if (booking.Status == BookingStatus.Cancelled)
-            throw new BadRequestException("Booking is already cancelled.");
+            throw new BadRequestException(
+                "Booking is already cancelled.");
 
         if (booking.Status != BookingStatus.Pending &&
             booking.Status != BookingStatus.Confirmed)
         {
-            throw new BadRequestException("This booking cannot be cancelled.");
+            throw new BadRequestException(
+                "This booking cannot be cancelled.");
         }
 
         var now = DateTime.UtcNow;
-        var scheduledStart = booking.BookingDate.Date
-            .Add(booking.StartTime.ToTimeSpan());
-        var timeUntilStart = scheduledStart - now;
-
-        // Cancellation is blocked inside the final two hours.
-        if (timeUntilStart < TimeSpan.FromHours(2))
-        {
-            throw new BadRequestException(
-                "Bookings cannot be cancelled less than 2 hours before the scheduled start time.");
-        }
-
-        // Recommended default policy: >24h = 95%, 12-24h = 50%,
-        // 2-12h = 25%. The policy should be shown before checkout.
-
-        decimal refundPercentage = timeUntilStart > TimeSpan.FromHours(24)
-            ? 0.95m
-            : timeUntilStart >= TimeSpan.FromHours(12)
-                ? 0.50m
-                : 0.25m;
-
-
         var payment = booking.Payment;
         decimal refundAmount = 0m;
 
-        if (payment?.Status == PaymentStatus.Paid && refundPercentage > 0m)
+        // 4. OWNER CANCELLATION POLICY: 100% refund.
+        // The customer's 2-hour cancellation restriction does not
+        // apply when the approved owner cancels the booking.
+        if (isApprovedOwner)
         {
-            refundAmount = decimal.Round(
-                payment.Amount * refundPercentage,
-                2,
-                MidpointRounding.AwayFromZero);
+            if (payment?.Status == PaymentStatus.Paid)
+            {
+                refundAmount = payment.Amount;
+            }
+        }
+        else
+        {
+            // 5. CUSTOMER CANCELLATION POLICY.
+            var indiaTimeZone = TimeZoneInfo.FindSystemTimeZoneById(
+                OperatingSystem.IsWindows()
+                    ? "India Standard Time"
+                    : "Asia/Kolkata");
+
+            var localSlotStart = DateTime.SpecifyKind(
+                booking.BookingDate.Date.Add(
+                    booking.StartTime.ToTimeSpan()),
+                DateTimeKind.Unspecified);
+
+            var scheduledStartUtc = TimeZoneInfo.ConvertTimeToUtc(
+                localSlotStart,
+                indiaTimeZone);
+
+            var timeUntilStart = scheduledStartUtc - now;
+
+            if (timeUntilStart < TimeSpan.FromHours(2))
+            {
+                throw new BadRequestException(
+                    "Bookings cannot be cancelled less than 2 hours before the scheduled start time.");
+            }
+
+            decimal refundPercentage =
+                timeUntilStart > TimeSpan.FromHours(24)
+                    ? 0.95m
+                    : timeUntilStart > TimeSpan.FromHours(12)
+                        ? 0.50m
+                        : 0.25m;
+
+            if (payment?.Status == PaymentStatus.Paid)
+            {
+                refundAmount = decimal.Round(
+                    payment.Amount * refundPercentage,
+                    2,
+                    MidpointRounding.AwayFromZero);
+            }
         }
 
-        // Persist cancellation and release slots first. Refund processing is
-        // separate because Razorpay is an external service.
+        // 6. Cancel the booking and release its slots.
         booking.Status = BookingStatus.Cancelled;
         booking.CancelledAt = now;
         booking.ExpiresAt = null;
@@ -691,9 +906,11 @@ public class BookingService : IBookingService
 
         await _context.SaveChangesAsync();
 
+        // 7. Process the refund through the existing Razorpay service.
         var refundNeedsAttention = false;
 
-        if (payment?.Status == PaymentStatus.Paid && refundAmount > 0m)
+        if (payment?.Status == PaymentStatus.Paid &&
+            refundAmount > 0m)
         {
             try
             {
@@ -704,18 +921,18 @@ public class BookingService : IBookingService
             }
             catch (Exception ex)
             {
-                // Cancellation remains committed; log the refund failure so
-                // it can be reviewed/retried rather than losing the request.
                 refundNeedsAttention = true;
+
                 _logger.LogError(
                     ex,
-                    "Cancellation refund failed or needs retry for booking {BookingId}, payment {PaymentId}, amount {RefundAmount}.",
+                    "Cancellation refund requires review. BookingId: {BookingId}, PaymentId: {PaymentId}, Amount: {RefundAmount}",
                     booking.Id,
                     payment.Id,
                     refundAmount);
             }
         }
 
+        // 8. Return the updated booking.
         var response = new BookingResponse
         {
             Id = booking.Id,
@@ -734,13 +951,18 @@ public class BookingService : IBookingService
         };
 
         var message = refundNeedsAttention
-            ? "Booking cancelled and slots released. The refund could not be confirmed; it requires retry or review."
+            ? "Booking cancelled, but the refund requires review or retry."
             : refundAmount > 0m
-                ? "Booking cancelled and slots released. Refund processing has been initiated; final status will update from Razorpay."
+                ? isApprovedOwner
+                    ? "Owner cancelled the booking. A full refund has been initiated."
+                    : "Booking cancelled. The applicable refund has been initiated."
                 : payment?.Status == PaymentStatus.Paid
-                    ? "Booking cancelled and slots released. No refund is due under the cancellation policy."
-                    : "Booking cancelled successfully and slots released. No payment refund is required.";
+                    ? "Booking cancelled. No refund is due under the cancellation policy."
+                    : "Booking cancelled successfully. No payment refund is required.";
 
-        return ApiResponse<BookingResponse>.SuccessResponse(response, message);
+        return ApiResponse<BookingResponse>.SuccessResponse(
+            response,
+            message);
     }
+
 }
