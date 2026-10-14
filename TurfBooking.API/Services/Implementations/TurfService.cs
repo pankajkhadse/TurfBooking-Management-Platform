@@ -550,7 +550,19 @@ namespace TurfBooking.API.Services.Implementations
 
             var selectedDate = date.Date;
 
-            var today = DateTime.UtcNow.Date;
+            //var today = DateTime.UtcNow.Date;
+
+            var indiaTimeZone = TimeZoneInfo.FindSystemTimeZoneById(
+    OperatingSystem.IsWindows()
+        ? "India Standard Time"
+        : "Asia/Kolkata");
+
+            var nowIst = TimeZoneInfo.ConvertTimeFromUtc(
+                DateTime.UtcNow,
+                indiaTimeZone);
+
+            var today = nowIst.Date;
+            var currentTimeIst = TimeOnly.FromDateTime(nowIst);
 
             if (selectedDate < today)
             {
